@@ -31,6 +31,6 @@ In this course, you’ll build a real Event Planner app that connects ChatGPT to
 
 Raghvendra Bhati
 
-Software Developer
+Data Scientist & AI Engineer
 
 [lil-course-url]:https://www.linkedin.com/learning/build-with-ai-create-apps-for-chatgpt-using-the-apps-sdk
