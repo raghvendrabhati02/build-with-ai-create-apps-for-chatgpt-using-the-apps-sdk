@@ -1,0 +1,10 @@
+{
+  "type": "module",
+  "name": "build-with-ai-create-apps-for-chatgpt-using-the-apps-sdk",
+  "version": "1.0.0",
+  "author": "Raghvendra Bhati <raghuthakur0217@gmail.com>",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "zod": "^3.25.76"
+  }
+}

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Event planner</title>
+  <style>
+    :root {
+      color: #0b0b0f;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #f6f8fb;
+    }
+
+    main {
+      width: 100%;
+      max-width: 360px;
+      min-height: 260px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: 1.25rem;
+    }
+
+    .subtitle {
+      margin: 0 0 16px;
+      font-size: 0.85rem;
+      color: #6c768a;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    li {
+      background: #f2f4fb;
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    li:hover {
+      border-color: #cad3e0;
+    }
+
+    li[data-selected="true"] {
+      border-color: #111bf5;
+      box-shadow: 0 0 0 1px rgba(17, 27, 245, 0.1);
+    }
+
+    .event-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .event-date {
+      font-size: 0.8rem;
+      color: #6c768a;
+    }
+
+    .event-url {
+      font-size: 0.75rem;
+      color: #111bf5;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .event-url:hover {
+      text-decoration: underline;
+    }
+
+    .empty {
+      font-size: 0.85rem;
+      color: #6c768a;
+    }
+
+    .selected-panel {
+      border-top: 1px solid #e1e6f0;
+      padding-top: 10px;
+      margin-top: 4px;
+    }
+
+    .selected-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .selected-desc {
+      font-size: 0.8rem;
+      color: #4b5563;
+      margin-bottom: 6px;
+    }
+
+    .selected-meta {
+      font-size: 0.8rem;
+      color: #6c768a;
+      margin-bottom: 6px;
+    }
+
+    .selected-link {
+      font-size: 0.8rem;
+      color: #111bf5;
+      text-decoration: none;
+    }
+
+    .selected-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Logo container */
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .header img {
+      width: 90px;
+      height: auto;
+      opacity: 0.9;
+      margin-bottom: 8px;
+    }
+
+    .header-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .header-subtitle {
+      font-size: 0.85rem;
+      color: #6c768a;
+      margin: 4px 0 0;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h2>Roundtaibles</h2>
+    <h3>AI Leadership Dinners</h3>
+    <p class="subtitle">Select an event from the list.</p>
+
+    <ul id="event-list"></ul>
+
+    <div id="empty-state" class="empty" style="display: none;">
+      No events to show yet.
+    </div>
+
+    <div id="selected-panel" class="selected-panel" style="display: none;">
+      <div class="selected-title">Selected event</div>
+      <div id="selected-name" class="selected-meta"></div>
+      <div id="selected-date" class="selected-meta"></div>
+      <div id="selected-desc" class="selected-desc"></div>
+      <a id="selected-link" class="selected-link" href="#" target="_blank" rel="noopener noreferrer">View on
+        Eventbrite</a>
+    </div>
+  </main>
+
+  <script type="module">
+    const listEl = document.querySelector("#event-list");
+    const emptyEl = document.querySelector("#empty-state");
+    const selectedPanelEl = document.querySelector("#selected-panel");
+    const selectedNameEl = document.querySelector("#selected-name");
+    const selectedDateEl = document.querySelector("#selected-date");
+    const selectedDescEl = document.querySelector("#selected-desc");
+    const selectedLinkEl = document.querySelector("#selected-link");
+
+    // Internal state
+    let events = normalizeInitialEvents(
+      window.openai?.toolOutput?.events ?? window.openai?.toolOutput?.event
+    );
+    let selectedId = null;
+
+    function normalizeInitialEvents(raw) {
+      // raw can be:
+      // - an array of Eventbrite event objects
+      // - a single event object
+      if (!raw) return [];
+      if (Array.isArray(raw)) {
+        return raw.map(normalizeEvent);
+      }
+      return [normalizeEvent(raw)];
+    }
+
+    function normalizeEvent(raw) {
+      if (!raw || typeof raw !== "object") return {};
+      return {
+        id: raw.id ?? null,
+        name: raw.name?.text ?? "Untitled event",
+        description:
+          raw.description?.text ??
+          raw.summary ??
+          "",
+        url: raw.url ?? "",
+        startLocal: raw.start?.local ?? "",
+        raw
+      };
+    }
+
+    function formatDate(localIso) {
+      if (!localIso) return "";
+      const d = new Date(localIso);
+      if (Number.isNaN(d.getTime())) return localIso;
+      return d.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      });
+    }
+
+    const render = () => {
+      listEl.innerHTML = "";
+
+      if (!events.length) {
+        emptyEl.style.display = "block";
+        selectedPanelEl.style.display = "none";
+        return;
+      }
+
+      emptyEl.style.display = "none";
+
+      events.forEach((event) => {
+        const li = document.createElement("li");
+        li.dataset.id = event.id ?? "";
+        li.dataset.selected = String(event.id === selectedId);
+
+        const nameEl = document.createElement("div");
+        nameEl.className = "event-name";
+        nameEl.textContent = event.name;
+
+        const dateEl = document.createElement("div");
+        dateEl.className = "event-date";
+        dateEl.textContent = formatDate(event.startLocal);
+
+        li.appendChild(nameEl);
+        if (event.startLocal) {
+          li.appendChild(dateEl);
+        }
+
+        if (event.url) {
+          const urlEl = document.createElement("a");
+          urlEl.className = "event-url";
+          urlEl.href = event.url;
+          urlEl.target = "_blank";
+          urlEl.rel = "noopener noreferrer";
+          urlEl.textContent = event.url;
+          li.appendChild(urlEl);
+        }
+
+        li.addEventListener("click", () => {
+          if (!event.id) return;
+          handleSelect(event.id);
+        });
+
+        listEl.appendChild(li);
+      });
+
+      renderSelected();
+    };
+
+    const renderSelected = () => {
+      const selectedEvent = events.find((e) => e.id === selectedId);
+      if (!selectedEvent) {
+        selectedPanelEl.style.display = "none";
+        return;
+      }
+
+      selectedPanelEl.style.display = "block";
+      selectedNameEl.textContent = selectedEvent.name;
+      selectedDateEl.textContent = selectedEvent.startLocal
+        ? "Starts: " + formatDate(selectedEvent.startLocal)
+        : "";
+      selectedDescEl.textContent = selectedEvent.description || "";
+      if (selectedEvent.url) {
+        selectedLinkEl.href = selectedEvent.url;
+        selectedLinkEl.style.display = "inline";
+      } else {
+        selectedLinkEl.style.display = "none";
+      }
+    };
+
+    const updateFromResponse = (response) => {
+      // Expect either:
+      // response.structuredContent.events (array)
+      // response.structuredContent.event (single)
+      const sc = response?.structuredContent;
+      if (!sc) return;
+
+      if (sc.events) {
+        events = normalizeInitialEvents(sc.events);
+        selectedId = null;
+        render();
+      } else if (sc.event) {
+        events = normalizeInitialEvents(sc.event);
+        selectedId = events[0]?.id ?? null;
+        render();
+      }
+    };
+
+    const handleSetGlobals = (event) => {
+      const globals = event.detail?.globals;
+      const toolOutput = globals?.toolOutput;
+      if (!toolOutput) return;
+
+      if (toolOutput.events) {
+        events = normalizeInitialEvents(toolOutput.events);
+        selectedId = null;
+        render();
+      } else if (toolOutput.event) {
+        events = normalizeInitialEvents(toolOutput.event);
+        selectedId = events[0]?.id ?? null;
+        render();
+      }
+    };
+
+    window.addEventListener("openai:set_globals", handleSetGlobals, {
+      passive: true
+    });
+
+    const mutateSelectionLocally = (id) => {
+      selectedId = id;
+      render();
+    };
+
+    // Updated to use the new tool name: "getEvent"
+    const callGetEventTool = async (id) => {
+      if (window.openai?.callTool) {
+        const response = await window.openai.callTool("getEvent", { id });
+        updateFromResponse(response);
+        return;
+      }
+
+      // Fallback: just select locally if callTool is not available
+      mutateSelectionLocally(id);
+    };
+
+    const handleSelect = async (id) => {
+      // Optionally update the selection immediately for snappy UI
+      selectedId = id;
+      renderSelected();
+
+      await callGetEventTool(id);
+    };
+
+    // Initial render
+    render();
+  </script>
+
+</body>
+
+</html>
